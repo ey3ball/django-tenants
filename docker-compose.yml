@@ -15,8 +15,9 @@ services:
       - "5433:5432"
   web:
     build: .
-    command: gunicorn dts_test_project.wsgi:application --bind 0.0.0.0:8088
+    command: gunicorn tenant_subfolder_tutorial.asgi:application --bind 0.0.0.0:8088 -k uvicorn.workers.UvicornWorker
     container_name: django_tenants_web
+    working_dir: /code/examples/tenant_subfolder_tutorial/
     volumes:
       - .:/code:z
     ports:
