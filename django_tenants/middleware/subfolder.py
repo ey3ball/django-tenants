@@ -2,13 +2,13 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
 from django.http import Http404
-from django.urls import set_urlconf, clear_url_caches
+from django.urls import set_urlconf, clear_url_caches, path, include
 from django_tenants.middleware import TenantMainMiddleware
-from django_tenants.urlresolvers import get_subfolder_urlconf
 from django_tenants.utils import (
     get_public_schema_name,
     get_tenant_model,
     get_subfolder_prefix, get_tenant_domain_model,
+    has_multi_type_tenants, get_tenant_types,
 )
 
 
@@ -29,6 +29,20 @@ class TenantSubfolderMiddleware(TenantMainMiddleware):
                 '"TenantSubfolderMiddleware" requires "TENANT_SUBFOLDER_PREFIX" '
                 "present and non-empty in settings"
             )
+
+    def get_tenant_urlconf(self, tenant):
+        if has_multi_type_tenants():
+            urlconf = get_tenant_types()[tenant.get_tenant_type()]['URLCONF']
+        else:
+            urlconf = settings.ROOT_URLCONF
+
+        subfolder_prefix = get_subfolder_prefix()
+        class TenantUrlConf(ModuleType):
+            urlpatterns = [
+                path(f"{subfolder_prefix}/{tenant.domain_subfolder}/", include(urlconf))
+            ]
+
+        return TenantUrlConf(tenant.domain_subfolder)
 
     def process_request(self, request):
         # Short circuit if tenant is already set by another middleware.
@@ -64,7 +78,7 @@ class TenantSubfolderMiddleware(TenantMainMiddleware):
                 return self.no_tenant_found(request, hostname)
 
             tenant.domain_subfolder = tenant_subfolder
-            urlconf = get_subfolder_urlconf(tenant)
+            urlconf = self.get_tenant_urlconf(tenant)
 
         tenant.domain_url = hostname
         request.tenant = tenant
